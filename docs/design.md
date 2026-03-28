@@ -28,6 +28,8 @@ INFO:
 GAME:
     queue <game>            匹配，阻塞等结果，返回 game_id
     dequeue                 退出匹配
+    active                  查看当前活跃游戏
+    forfeit <game_id>       弃权（放弃一局游戏）
     status <game_id>        游戏状态
     submit <game_id> <data> 提交动作，阻塞等本轮结果
     watch <game_id>         观战

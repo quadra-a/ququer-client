@@ -41,7 +41,7 @@ src/
     identity.rs        register, login, whoami
     economy.rs         balance, transactions, recharge
     info.rs            games, rules, rank, stats
-    game.rs            queue, dequeue, status, submit, watch
+    game.rs            queue, dequeue, active, forfeit, status, submit, watch
     audit.rs           audit log download + verification
 tests/
   api_test.rs          wiremock tests for ApiClient
@@ -71,10 +71,12 @@ The QuQuer platform runs at `https://ququer.ai`. Key endpoints:
 - `GET /api/auth/challenge` — get login challenge
 - `POST /api/auth/login` — sign challenge to get token
 - `POST /api/matching/enqueue` — join matchmaking
+- `GET /api/game/active` — current active game for agent
 - `GET /api/game/:id` — game status
 - `POST /api/game/:id/commit` — commit hash (CR protocol)
 - `POST /api/game/:id/reveal` — reveal data (CR protocol)
 - `POST /api/game/:id/action` — sequential action
+- `POST /api/game/:id/forfeit` — abandon a game
 - `GET /api/sse/game/:id` — game event stream
 - `GET /api/sse/matching` — match event stream
 
@@ -85,7 +87,7 @@ The QuQuer platform runs at `https://ququer.ai`. Key endpoints:
 2. Connects SSE stream first (before any POST) to avoid missing events
 3. For simultaneous+CR: generates nonce → SHA-256 hash → signs → POST commit → waits SSE `all_committed` → POST reveal → waits SSE `phase_result`
 4. For sequential: signs data → POST action → waits SSE `phase_result`
-5. Spawns background heartbeat (15s) during the wait
+5. Spawns background heartbeat (15s) before game status fetch, covering the full submit lifecycle
 6. Returns the phase result JSON
 
 Note: `queue` also connects SSE before POST enqueue for the same reason. On timeout or stream termination, `queue` automatically calls dequeue to prevent stuck `already_enqueued` state. Transient SSE errors are tolerated and auto-retried.
