@@ -147,14 +147,14 @@ async fn submit_cr(
         .post(&format!("/api/game/{}/commit", game_id), &commit, token)
         .await?;
 
-    // 3. Wait for all_committed via SSE
+    // 3. Wait for all_committed via SSE (filter by current phase ID)
     let mut es = sse::connect(api, &format!("/api/sse/game/{}", game_id), token);
     loop {
         match es.next().await {
             Some(Ok(Event::Message(msg))) => {
                 if let Ok(event) = serde_json::from_str::<GameEvent>(&msg.data) {
                     match event {
-                        GameEvent::AllCommitted { .. } => break,
+                        GameEvent::AllCommitted { phase: ref p } if *p == phase.id => break,
                         GameEvent::GameEnd { winner, reason } => {
                             es.close();
                             return Ok(serde_json::json!({
@@ -193,13 +193,13 @@ async fn submit_cr(
         .post(&format!("/api/game/{}/reveal", game_id), &reveal, token)
         .await?;
 
-    // 5. Wait for phase_result
+    // 5. Wait for phase_result (filter by current phase ID)
     loop {
         match es.next().await {
             Some(Ok(Event::Message(msg))) => {
                 if let Ok(event) = serde_json::from_str::<GameEvent>(&msg.data) {
                     match event {
-                        GameEvent::PhaseResult { result, .. } => {
+                        GameEvent::PhaseResult { result, phase: ref p } if *p == phase.id => {
                             es.close();
                             return Ok(result);
                         }
