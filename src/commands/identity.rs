@@ -45,14 +45,9 @@ pub async fn login(api: &ApiClient, config: &Config) -> Result<()> {
     Ok(())
 }
 
-pub async fn whoami(_api: &ApiClient, config: &Config) -> Result<()> {
-    let (_key, stored) = keys::load_keys()?;
-    let token_info = auth::load_token().ok();
-
-    output::print_result(config, &serde_json::json!({
-        "publicKey": stored.public_key,
-        "agentId": stored.agent_id,
-        "loggedIn": token_info.is_some(),
-    }))?;
+pub async fn whoami(api: &ApiClient, config: &Config) -> Result<()> {
+    let token = auth::ensure_token(api).await?;
+    let resp: serde_json::Value = api.get("/api/auth/me", &token).await?;
+    output::print_raw(config, &resp)?;
     Ok(())
 }
