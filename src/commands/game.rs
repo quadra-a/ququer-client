@@ -4,7 +4,7 @@ use anyhow::Result;
 use futures::StreamExt;
 use reqwest_eventsource::Event;
 
-use crate::api::ApiClient;
+use crate::api::{ApiClient, ApiError};
 use crate::auth;
 use crate::config::Config;
 use crate::crypto::{commit_hash, generate_nonce, sign_bytes};
@@ -12,8 +12,8 @@ use crate::keys;
 use crate::output;
 use crate::sse;
 use crate::types::{
-    ActionPayload, CommitPayload, EnqueueRequest, GameEvent, GameStatusResponse, MatchEvent,
-    PhaseInfo, RevealPayload,
+    ActionPayload, ActiveGameResponse, CommitPayload, EnqueueRequest, GameEvent,
+    GameStatusResponse, MatchEvent, PhaseInfo, RevealPayload,
 };
 
 fn now_ms() -> u64 {
@@ -42,7 +42,22 @@ pub async fn queue(api: &ApiClient, config: &Config, game: &str) -> Result<()> {
     let req = EnqueueRequest {
         game_type: game.to_string(),
     };
-    let _: serde_json::Value = api.post("/api/matching/enqueue", &req, &token).await?;
+    let _: serde_json::Value = match api.post("/api/matching/enqueue", &req, &token).await {
+        Ok(v) => v,
+        Err(e) => {
+            es.close();
+            if let Some(api_err) = e.downcast_ref::<ApiError>() {
+                if api_err.status == 409 && api_err.body.contains("already_in_game") {
+                    anyhow::bail!(
+                        "You are already in an active game. \
+                         Use `ququer active` to find your game ID, \
+                         or `ququer forfeit <game_id>` to abandon it."
+                    );
+                }
+            }
+            return Err(e);
+        }
+    };
 
     // Wait for match via SSE
     let result = sse::wait_for_event::<MatchEvent>(&mut es).await;
@@ -97,6 +112,26 @@ pub async fn dequeue(api: &ApiClient, config: &Config) -> Result<()> {
     Ok(())
 }
 
+pub async fn active(api: &ApiClient, config: &Config) -> Result<()> {
+    let token = auth::ensure_token(api).await?;
+    let resp: ActiveGameResponse = api.get("/api/game/active", &token).await?;
+    output::print_result(config, &resp)?;
+    Ok(())
+}
+
+pub async fn forfeit(api: &ApiClient, config: &Config, game_id: &str) -> Result<()> {
+    let token = auth::ensure_token(api).await?;
+    let resp: serde_json::Value = api
+        .post(
+            &format!("/api/game/{}/forfeit", game_id),
+            &serde_json::json!({}),
+            &token,
+        )
+        .await?;
+    output::print_raw(config, &resp)?;
+    Ok(())
+}
+
 pub async fn status(api: &ApiClient, config: &Config, game_id: &str) -> Result<()> {
     let token = auth::ensure_token(api).await?;
     let resp: GameStatusResponse = api.get(&format!("/api/game/{}", game_id), &token).await?;
@@ -113,13 +148,13 @@ pub async fn submit(api: &ApiClient, config: &Config, game_id: &str, data: &str)
         serde_json::from_str(data).map_err(|e| anyhow::anyhow!("invalid JSON data: {}", e))?;
     let data_str = serde_json::to_string(&data_value)?;
 
+    // Start heartbeat early — covers the game status fetch and phase extraction
+    let heartbeat = sse::spawn_heartbeat(api.clone(), game_id.to_string(), token.clone());
+
     // Get current game status to determine phase type
     let game_status: GameStatusResponse =
         api.get(&format!("/api/game/{}", game_id), &token).await?;
     let phase = extract_phase(&game_status.visible_state)?;
-
-    // Start heartbeat
-    let heartbeat = sse::spawn_heartbeat(api.clone(), game_id.to_string(), token.clone());
 
     let result = if phase.phase_type == "simultaneous" && phase.uses_commit_reveal {
         submit_cr(api, game_id, &phase, &key, &data_str, &data_value, &token).await

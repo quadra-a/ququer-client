@@ -72,6 +72,15 @@ pub struct Transaction {
 // === Game ===
 
 #[derive(Deserialize, Serialize, Debug)]
+pub struct ActiveGameResponse {
+    #[serde(rename = "gameId")]
+    pub game_id: Option<String>,
+    pub state: Option<String>,
+    #[serde(rename = "gameType")]
+    pub game_type: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
 pub struct GameInfo {
     pub id: String,
     pub name: String,

@@ -71,6 +71,13 @@ pub enum Commands {
         /// Game ID
         game_id: String,
     },
+    /// Show current active game (if any)
+    Active,
+    /// Forfeit (abandon) an active game
+    Forfeit {
+        /// Game ID
+        game_id: String,
+    },
 
     /// Download and verify game audit log
     Audit {

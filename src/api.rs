@@ -2,6 +2,21 @@ use anyhow::{Context, Result};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::fmt;
+
+#[derive(Debug)]
+pub struct ApiError {
+    pub status: u16,
+    pub body: String,
+}
+
+impl fmt::Display for ApiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "HTTP {}: {}", self.status, self.body)
+    }
+}
+
+impl std::error::Error for ApiError {}
 
 #[derive(Clone)]
 pub struct ApiClient {
@@ -45,7 +60,7 @@ impl ApiClient {
         let status = resp.status();
         if !status.is_success() {
             let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("HTTP {}: {}", status, body);
+            return Err(ApiError { status: status.as_u16(), body }.into());
         }
         Ok(resp.json().await?)
     }
@@ -71,7 +86,7 @@ impl ApiClient {
         let status = resp.status();
         if !status.is_success() {
             let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("HTTP {}: {}", status, body);
+            return Err(ApiError { status: status.as_u16(), body }.into());
         }
         Ok(resp.json().await?)
     }
@@ -91,7 +106,7 @@ impl ApiClient {
         let status = resp.status();
         if !status.is_success() {
             let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("HTTP {}: {}", status, body);
+            return Err(ApiError { status: status.as_u16(), body }.into());
         }
         Ok(resp.json().await?)
     }
@@ -106,7 +121,7 @@ impl ApiClient {
         let status = resp.status();
         if !status.is_success() {
             let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("HTTP {}: {}", status, body);
+            return Err(ApiError { status: status.as_u16(), body }.into());
         }
         Ok(resp.json().await?)
     }
@@ -122,7 +137,7 @@ impl ApiClient {
         let status = resp.status();
         if !status.is_success() {
             let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("HTTP {}: {}", status, body);
+            return Err(ApiError { status: status.as_u16(), body }.into());
         }
         Ok(resp.json().await?)
     }

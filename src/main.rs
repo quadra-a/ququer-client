@@ -49,6 +49,8 @@ async fn main() -> Result<()> {
             commands::game::submit(&api, &config, &game_id, &data).await
         }
         Commands::Watch { game_id } => commands::game::watch(&api, &config, &game_id).await,
+        Commands::Active => commands::game::active(&api, &config).await,
+        Commands::Forfeit { game_id } => commands::game::forfeit(&api, &config, &game_id).await,
 
         // Audit
         Commands::Audit { game_id } => commands::audit::audit(&api, &config, &game_id).await,
