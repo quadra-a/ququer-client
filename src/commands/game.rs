@@ -36,13 +36,15 @@ fn extract_phase(visible_state: &serde_json::Value) -> Result<PhaseInfo> {
 pub async fn queue(api: &ApiClient, config: &Config, game: &str) -> Result<()> {
     let token = auth::ensure_token(api).await?;
 
+    // Connect SSE first so we don't miss events
+    let mut es = sse::connect(api, "/api/sse/matching", &token);
+
     let req = EnqueueRequest {
         game_type: game.to_string(),
     };
     let _: serde_json::Value = api.post("/api/matching/enqueue", &req, &token).await?;
 
     // Wait for match via SSE
-    let mut es = sse::connect(api, "/api/sse/matching", &token);
     let event: MatchEvent = sse::wait_for_event(&mut es).await?;
     es.close();
 
@@ -135,7 +137,10 @@ async fn submit_cr(
     let hash = commit_hash(data_str, &nonce);
     let signature = sign_bytes(key, hash.as_bytes());
 
-    // 2. Commit
+    // 2. Connect SSE first so we don't miss all_committed
+    let mut es = sse::connect(api, &format!("/api/sse/game/{}", game_id), token);
+
+    // 3. Commit
     let commit = CommitPayload {
         game_id: game_id.to_string(),
         phase_id: phase.id.clone(),
@@ -147,8 +152,7 @@ async fn submit_cr(
         .post(&format!("/api/game/{}/commit", game_id), &commit, token)
         .await?;
 
-    // 3. Wait for all_committed via SSE (filter by current phase ID)
-    let mut es = sse::connect(api, &format!("/api/sse/game/{}", game_id), token);
+    // 4. Wait for all_committed via SSE (filter by current phase ID)
     loop {
         match es.next().await {
             Some(Ok(Event::Message(msg))) => {
@@ -178,7 +182,7 @@ async fn submit_cr(
         }
     }
 
-    // 4. Reveal
+    // 5. Reveal
     let reveal_msg = format!("{}:{}", data_str, nonce);
     let reveal_sig = sign_bytes(key, reveal_msg.as_bytes());
     let reveal = RevealPayload {
@@ -193,7 +197,7 @@ async fn submit_cr(
         .post(&format!("/api/game/{}/reveal", game_id), &reveal, token)
         .await?;
 
-    // 5. Wait for phase_result (filter by current phase ID)
+    // 6. Wait for phase_result (filter by current phase ID)
     loop {
         match es.next().await {
             Some(Ok(Event::Message(msg))) => {
@@ -235,7 +239,10 @@ async fn submit_action(
     data_value: &serde_json::Value,
     token: &str,
 ) -> Result<serde_json::Value> {
-    // 1. Sign and submit action
+    // 1. Connect SSE first so we don't miss phase_result
+    let mut es = sse::connect(api, &format!("/api/sse/game/{}", game_id), token);
+
+    // 2. Sign and submit action
     let data_str = serde_json::to_string(data_value)?;
     let signature = sign_bytes(key, data_str.as_bytes());
     let action = ActionPayload {
@@ -250,8 +257,7 @@ async fn submit_action(
         .post(&format!("/api/game/{}/action", game_id), &action, token)
         .await?;
 
-    // 2. Wait for phase_result via SSE
-    let mut es = sse::connect(api, &format!("/api/sse/game/{}", game_id), token);
+    // 3. Wait for phase_result via SSE
     loop {
         match es.next().await {
             Some(Ok(Event::Message(msg))) => {
