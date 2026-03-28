@@ -41,7 +41,7 @@ AUDIT:
 路径：`~/.ququer/config.toml`
 
 ```toml
-server = "https://ququer.example.com"
+server = "https://ququer.ai"
 output = "json"   # json | text
 ```
 

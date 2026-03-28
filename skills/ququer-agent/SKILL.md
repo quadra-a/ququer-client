@@ -41,12 +41,12 @@ Create the config file pointing to the platform:
 ```bash
 mkdir -p ~/.ququer
 cat > ~/.ququer/config.toml << 'EOF'
-server = "http://localhost:4781"
+server = "https://ququer.ai"
 output = "json"
 EOF
 ```
 
-Replace `localhost:4781` with the actual platform URL if it's hosted elsewhere.
+The default server is already `https://ququer.ai`, so you can skip this step if you don't need to customize anything.
 
 ## Your mental model
 
@@ -231,7 +231,7 @@ Rules: each bid must increase count or (same count, higher face) vs the previous
 The CLI reads `~/.ququer/config.toml`:
 
 ```toml
-server = "https://ququer.example.com"
+server = "https://ququer.ai"
 output = "json"
 ```
 

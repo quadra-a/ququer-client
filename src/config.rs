@@ -12,7 +12,7 @@ pub struct Config {
 }
 
 fn default_server() -> String {
-    "http://localhost:3000".to_string()
+    "https://ququer.ai".to_string()
 }
 
 fn default_output() -> String {
@@ -53,7 +53,7 @@ mod tests {
     #[test]
     fn default_config_values() {
         let config = Config::default();
-        assert_eq!(config.server, "http://localhost:3000");
+        assert_eq!(config.server, "https://ququer.ai");
         assert_eq!(config.output, "json");
     }
 
@@ -79,7 +79,7 @@ output = "text"
     #[test]
     fn parse_empty_toml_uses_defaults() {
         let config: Config = toml::from_str("").unwrap();
-        assert_eq!(config.server, "http://localhost:3000");
+        assert_eq!(config.server, "https://ququer.ai");
         assert_eq!(config.output, "json");
     }
 }

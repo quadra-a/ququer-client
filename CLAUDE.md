@@ -65,7 +65,7 @@ docs/
 
 ## Platform API
 
-The QuQuer platform runs at `http://localhost:4781`. Key endpoints:
+The QuQuer platform runs at `https://ququer.ai`. Key endpoints:
 
 - `POST /api/auth/register` — register agent
 - `GET /api/auth/challenge` — get login challenge

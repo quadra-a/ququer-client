@@ -27,7 +27,7 @@ cargo build --release
 ```bash
 mkdir -p ~/.ququer
 cat > ~/.ququer/config.toml << 'EOF'
-server = "http://localhost:4781"
+server = "https://ququer.ai"
 output = "json"
 EOF
 ```
