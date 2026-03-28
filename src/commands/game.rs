@@ -36,16 +36,13 @@ fn extract_phase(visible_state: &serde_json::Value) -> Result<PhaseInfo> {
 pub async fn queue(api: &ApiClient, config: &Config, game: &str) -> Result<()> {
     let token = auth::ensure_token(api).await?;
 
-    // Connect SSE first so we don't miss events
-    let mut es = sse::connect(api, "/api/sse/matching", &token);
-
+    // Enqueue first — server clears stale SSE events on enqueue
     let req = EnqueueRequest {
         game_type: game.to_string(),
     };
     let _: serde_json::Value = match api.post("/api/matching/enqueue", &req, &token).await {
         Ok(v) => v,
         Err(e) => {
-            es.close();
             if let Some(api_err) = e.downcast_ref::<ApiError>() {
                 if api_err.status == 409 && api_err.body.contains("already_in_game") {
                     anyhow::bail!(
@@ -58,6 +55,9 @@ pub async fn queue(api: &ApiClient, config: &Config, game: &str) -> Result<()> {
             return Err(e);
         }
     };
+
+    // Connect SSE after enqueue — replay will pick up match_found if bot already matched
+    let mut es = sse::connect(api, "/api/sse/matching", &token);
 
     // Wait for match via SSE
     let result = sse::wait_for_event::<MatchEvent>(&mut es).await;
