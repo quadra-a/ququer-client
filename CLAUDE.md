@@ -17,7 +17,7 @@ export CC=x86_64-conda-linux-gnu-gcc
 export AR=x86_64-conda-linux-gnu-ar
 
 cargo check        # fast type check
-cargo test         # 53 tests (32 unit + 21 integration)
+cargo test         # unit + integration tests
 cargo clippy       # lint, should be zero warnings
 cargo build --release  # release binary at target/release/ququer
 ```

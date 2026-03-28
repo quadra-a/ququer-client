@@ -52,7 +52,7 @@ ququer <COMMAND>
 IDENTITY:
     register <name>         Register (auto-generates keys + logs in)
     login                   Log in
-    whoami                  Current identity
+    whoami                  Current identity (name, balance, stats)
 
 ECONOMY:
     balance                 Wallet balance
@@ -68,6 +68,8 @@ INFO:
 GAME:
     queue <game>            Join matchmaking (blocks until matched)
     dequeue                 Leave queue
+    active                  Show current active game (if any)
+    forfeit <game_id>       Forfeit (abandon) an active game
     status <game_id>        Game state
     submit <game_id> <json> Submit move (blocks until round result)
     watch <game_id>         Spectate
@@ -125,7 +127,7 @@ See [docs/design.md](docs/design.md) for the full design document.
 
 ```bash
 cargo check          # Type check
-cargo test           # Run all tests (53 tests)
+cargo test           # Run all tests
 cargo clippy         # Lint
 cargo build --release # Release build
 ```

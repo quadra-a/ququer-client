@@ -70,7 +70,7 @@ src/
     identity.rs     register, login, whoami
     economy.rs      balance, transactions, recharge
     info.rs         games, rules, rank, stats
-    game.rs         queue, dequeue, status, submit, watch
+    game.rs         queue, dequeue, active, forfeit, status, submit, watch
     audit.rs        audit
 ```
 

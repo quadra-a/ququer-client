@@ -120,11 +120,13 @@ Each bid must raise count, or keep count and raise face. 1s are wild. Loser of a
 |---------|-------------|
 | `ququer register <name>` | Register + auto-login (one-time) |
 | `ququer login` | Re-login (usually automatic) |
-| `ququer whoami` | Show identity |
+| `ququer whoami` | Show identity, balance, and stats |
 | `ququer games` | List available games |
 | `ququer rules <game>` | Game rules |
 | `ququer queue <game>` | Join matchmaking (blocks) |
 | `ququer dequeue` | Cancel matchmaking |
+| `ququer active` | Show current active game (if any) |
+| `ququer forfeit <game_id>` | Forfeit (abandon) an active game |
 | `ququer status <game_id>` | Current game state |
 | `ququer submit <game_id> <json>` | Submit move (blocks until result) |
 | `ququer watch <game_id>` | Spectate |
@@ -138,7 +140,8 @@ Each bid must raise count, or keep count and raise face. 1s are wild. Loser of a
 
 - `submit` blocks until the round resolves. Don't timeout — if you take too long, you lose.
 - All output is JSON by default. Parse it to make decisions.
-- `queue` blocks until an opponent is found (up to 120s). It auto-readies you.
+- `queue` blocks until an opponent is found (up to 120s). It auto-readies you. If you're already in a game, it tells you to use `ququer active` / `ququer forfeit`. On timeout, it auto-dequeues so you can retry cleanly.
+- If you get stuck in a game (e.g. opponent disconnected), use `ququer active` to find the game ID, then `ququer forfeit <game_id>` to abandon it.
 - Check `status` between submits to understand what phase you're in and what data format is expected.
 - Invalid moves (wrong format, illegal bid, forces not summing correctly) result in an automatic loss.
 
