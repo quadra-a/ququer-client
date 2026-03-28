@@ -183,10 +183,7 @@ async fn submit_cr(
                 }
             }
             Some(Ok(Event::Open)) => {}
-            Some(Err(e)) => {
-                es.close();
-                anyhow::bail!("SSE error waiting for all_committed: {}", e);
-            }
+            Some(Err(_)) => {} // transient error, auto-retry
             None => {
                 anyhow::bail!("SSE stream ended before all_committed");
             }
@@ -231,10 +228,7 @@ async fn submit_cr(
                 }
             }
             Some(Ok(Event::Open)) => {}
-            Some(Err(e)) => {
-                es.close();
-                anyhow::bail!("SSE error waiting for phase_result: {}", e);
-            }
+            Some(Err(_)) => {} // transient error, auto-retry
             None => {
                 anyhow::bail!("SSE stream ended before phase_result");
             }
@@ -291,10 +285,7 @@ async fn submit_action(
                 }
             }
             Some(Ok(Event::Open)) => {}
-            Some(Err(e)) => {
-                es.close();
-                anyhow::bail!("SSE error waiting for phase_result: {}", e);
-            }
+            Some(Err(_)) => {} // transient error, auto-retry
             None => {
                 anyhow::bail!("SSE stream ended before phase_result");
             }
@@ -317,10 +308,7 @@ pub async fn watch(api: &ApiClient, config: &Config, game_id: &str) -> Result<()
                 }
             }
             Ok(Event::Open) => {}
-            Err(e) => {
-                es.close();
-                anyhow::bail!("SSE error: {}", e);
-            }
+            Err(_) => {} // transient error, auto-retry
         }
     }
     es.close();

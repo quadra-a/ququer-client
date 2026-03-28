@@ -24,7 +24,11 @@ pub async fn wait_for_event<T: DeserializeOwned>(es: &mut EventSource) -> Result
                 }
             }
             Ok(Event::Open) => {}
-            Err(e) => anyhow::bail!("SSE error: {}", e),
+            // reqwest_eventsource emits Err on transient issues (network blip,
+            // stream reset) and then auto-retries via its retry policy.
+            // Only bail when the stream is truly done (None from poll_next,
+            // which means is_closed == true after retries exhausted).
+            Err(_) => {}
         }
     }
     anyhow::bail!("SSE stream ended unexpectedly")
