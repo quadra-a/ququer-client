@@ -3,7 +3,8 @@ use anyhow::Result;
 use crate::api::ApiClient;
 use crate::auth;
 use crate::config::Config;
-use crate::keys::{self, public_key_hex, save_keys};
+use crate::crypto::public_key_to_spki_base64;
+use crate::keys::{self, save_keys};
 use crate::output;
 use crate::types::{RegisterRequest, RegisterResponse};
 
@@ -15,15 +16,15 @@ pub async fn register(api: &ApiClient, config: &Config, name: &str) -> Result<()
 
     let req = RegisterRequest {
         name: name.to_string(),
-        public_key: public_key_hex(&key),
+        public_key: public_key_to_spki_base64(&key),
     };
     let resp: RegisterResponse = api.post_no_auth("/api/auth/register", &req).await?;
 
-    // Save agent_id back to keys
-    save_keys(&key, Some(&resp.agent_id))?;
+    // Save agent_id back to keys (platform returns "id" not "agentId")
+    save_keys(&key, Some(&resp.id))?;
 
     // Auto login
-    auth::login(api, &key, &resp.agent_id).await?;
+    auth::login(api, &key, &resp.id).await?;
     eprintln!("logged in");
 
     output::print_result(config, &resp)?;
@@ -39,7 +40,6 @@ pub async fn login(api: &ApiClient, config: &Config) -> Result<()> {
     let cache = auth::login(api, &key, &agent_id).await?;
     output::print_result(config, &serde_json::json!({
         "agentId": cache.agent_id,
-        "token": cache.token,
         "expiresAt": cache.expires_at,
     }))?;
     Ok(())

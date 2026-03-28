@@ -12,13 +12,30 @@ use crate::keys;
 use crate::output;
 use crate::sse;
 use crate::types::{
-    ActionPayload, CommitPayload, EnqueueRequest, GameEvent, GameStatus, MatchEvent, RevealPayload,
+    ActionPayload, CommitPayload, EnqueueRequest, GameEvent, GameStatusResponse, MatchEvent,
+    PhaseInfo, RevealPayload,
 };
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
+}
+
+/// Extract current phase from visibleState
+fn extract_phase(visible_state: &serde_json::Value) -> Result<PhaseInfo> {
+    let phase_val = visible_state
+        .get("currentPhase")
+        .ok_or_else(|| anyhow::anyhow!("no active phase in visibleState"))?;
+    let phase: PhaseInfo = serde_json::from_value(phase_val.clone())
+        .map_err(|e| anyhow::anyhow!("failed to parse currentPhase: {}", e))?;
+    Ok(phase)
+}
 
 pub async fn queue(api: &ApiClient, config: &Config, game: &str) -> Result<()> {
     let token = auth::ensure_token(api).await?;
 
-    // Enqueue
     let req = EnqueueRequest {
         game_type: game.to_string(),
     };
@@ -69,7 +86,7 @@ pub async fn dequeue(api: &ApiClient, config: &Config) -> Result<()> {
 
 pub async fn status(api: &ApiClient, config: &Config, game_id: &str) -> Result<()> {
     let token = auth::ensure_token(api).await?;
-    let resp: GameStatus = api.get(&format!("/api/game/{}", game_id), &token).await?;
+    let resp: GameStatusResponse = api.get(&format!("/api/game/{}", game_id), &token).await?;
     output::print_result(config, &resp)?;
     Ok(())
 }
@@ -84,18 +101,17 @@ pub async fn submit(api: &ApiClient, config: &Config, game_id: &str, data: &str)
     let data_str = serde_json::to_string(&data_value)?;
 
     // Get current game status to determine phase type
-    let game_status: GameStatus = api.get(&format!("/api/game/{}", game_id), &token).await?;
-    let phase = game_status
-        .current_phase
-        .ok_or_else(|| anyhow::anyhow!("no active phase"))?;
+    let game_status: GameStatusResponse =
+        api.get(&format!("/api/game/{}", game_id), &token).await?;
+    let phase = extract_phase(&game_status.visible_state)?;
 
     // Start heartbeat
     let heartbeat = sse::spawn_heartbeat(api.clone(), game_id.to_string(), token.clone());
 
     let result = if phase.phase_type == "simultaneous" && phase.uses_commit_reveal {
-        submit_cr(api, game_id, &phase.name, &key, &data_str, &data_value, &token).await
+        submit_cr(api, game_id, &phase, &key, &data_str, &data_value, &token).await
     } else {
-        submit_action(api, game_id, &phase.name, &key, &data_value, &token).await
+        submit_action(api, game_id, &phase, &key, &data_value, &token).await
     };
 
     heartbeat.abort();
@@ -108,7 +124,7 @@ pub async fn submit(api: &ApiClient, config: &Config, game_id: &str, data: &str)
 async fn submit_cr(
     api: &ApiClient,
     game_id: &str,
-    phase_id: &str,
+    phase: &PhaseInfo,
     key: &ed25519_dalek::SigningKey,
     data_str: &str,
     data_value: &serde_json::Value,
@@ -118,18 +134,14 @@ async fn submit_cr(
     let nonce = generate_nonce();
     let hash = commit_hash(data_str, &nonce);
     let signature = sign_bytes(key, hash.as_bytes());
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as u64;
 
     // 2. Commit
     let commit = CommitPayload {
         game_id: game_id.to_string(),
-        phase_id: phase_id.to_string(),
+        phase_id: phase.id.clone(),
         hash,
         signature,
-        timestamp,
+        timestamp: now_ms(),
     };
     let _: serde_json::Value = api
         .post(&format!("/api/game/{}/commit", game_id), &commit, token)
@@ -171,10 +183,11 @@ async fn submit_cr(
     let reveal_sig = sign_bytes(key, reveal_msg.as_bytes());
     let reveal = RevealPayload {
         game_id: game_id.to_string(),
-        phase_id: phase_id.to_string(),
+        phase_id: phase.id.clone(),
         data: data_value.clone(),
         nonce,
         signature: reveal_sig,
+        timestamp: now_ms(),
     };
     let _: serde_json::Value = api
         .post(&format!("/api/game/{}/reveal", game_id), &reveal, token)
@@ -217,7 +230,7 @@ async fn submit_cr(
 async fn submit_action(
     api: &ApiClient,
     game_id: &str,
-    phase_id: &str,
+    phase: &PhaseInfo,
     key: &ed25519_dalek::SigningKey,
     data_value: &serde_json::Value,
     token: &str,
@@ -227,9 +240,11 @@ async fn submit_action(
     let signature = sign_bytes(key, data_str.as_bytes());
     let action = ActionPayload {
         game_id: game_id.to_string(),
-        phase_id: phase_id.to_string(),
+        phase_id: phase.id.clone(),
+        action_type: phase.name.clone(),
         data: data_value.clone(),
         signature,
+        timestamp: now_ms(),
     };
     let _: serde_json::Value = api
         .post(&format!("/api/game/{}/action", game_id), &action, token)
@@ -279,7 +294,6 @@ pub async fn watch(api: &ApiClient, config: &Config, game_id: &str) -> Result<()
             Ok(Event::Message(msg)) => {
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(&msg.data) {
                     output::print_raw(config, &value)?;
-                    // Stop on game_end
                     if value.get("type").and_then(|t| t.as_str()) == Some("game_end") {
                         break;
                     }

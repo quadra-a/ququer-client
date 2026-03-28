@@ -13,7 +13,7 @@ use crate::types::{ChallengeResponse, LoginRequest, LoginResponse};
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TokenCache {
     pub token: String,
-    pub expires_at: String,
+    pub expires_at: u64,
     pub agent_id: String,
 }
 
@@ -40,7 +40,7 @@ pub async fn login(api: &ApiClient, key: &SigningKey, agent_id: &str) -> Result<
         .get_no_auth(&format!("/api/auth/challenge?agentId={}", agent_id))
         .await?;
 
-    // 2. Sign challenge
+    // 2. Sign challenge (platform expects base64 Ed25519 signature)
     let signature = sign_bytes(key, challenge.challenge.as_bytes());
 
     // 3. Login
@@ -68,7 +68,7 @@ pub async fn ensure_token(api: &ApiClient) -> Result<String> {
         .ok_or_else(|| anyhow::anyhow!("no agent_id — run `ququer register` first"))?;
 
     match load_token() {
-        Ok(cache) if !is_expired(&cache.expires_at) => Ok(cache.token),
+        Ok(cache) if !is_expired(cache.expires_at) => Ok(cache.token),
         _ => {
             let cache = login(api, &key, &agent_id).await?;
             Ok(cache.token)
@@ -76,21 +76,12 @@ pub async fn ensure_token(api: &ApiClient) -> Result<String> {
     }
 }
 
-fn is_expired(expires_at: &str) -> bool {
-    // Parse ISO 8601 timestamp, compare with now
-    // If parsing fails, treat as expired
-    let now = SystemTime::now()
+fn is_expired(expires_at: u64) -> bool {
+    let now_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
-        .as_secs();
-
-    // Try parsing as unix timestamp first, then ISO 8601
-    if let Ok(ts) = expires_at.parse::<u64>() {
-        return now >= ts;
-    }
-
-    // Simple ISO 8601 check — if we can't parse, assume expired
-    true
+        .as_millis() as u64;
+    now_ms >= expires_at
 }
 
 #[cfg(test)]
@@ -98,25 +89,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn is_expired_future_unix_timestamp() {
-        // Far future timestamp
-        assert!(!is_expired("9999999999"));
+    fn is_expired_future_timestamp() {
+        assert!(!is_expired(u64::MAX));
     }
 
     #[test]
-    fn is_expired_past_unix_timestamp() {
-        assert!(is_expired("1000000000"));
+    fn is_expired_past_timestamp() {
+        assert!(is_expired(0));
     }
 
     #[test]
-    fn is_expired_zero() {
-        assert!(is_expired("0"));
-    }
-
-    #[test]
-    fn is_expired_non_numeric_returns_true() {
-        assert!(is_expired("2026-03-28T12:00:00Z"));
-        assert!(is_expired("not-a-timestamp"));
-        assert!(is_expired(""));
+    fn is_expired_one_second_ago() {
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        assert!(is_expired(now_ms - 1000));
     }
 }

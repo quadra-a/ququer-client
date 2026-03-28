@@ -1151,6 +1151,7 @@ name = "ququer-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64",
  "clap",
  "dirs",
  "ed25519-dalek",

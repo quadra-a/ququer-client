@@ -11,16 +11,19 @@ pub struct RegisterRequest {
 
 #[derive(Deserialize, Serialize)]
 pub struct RegisterResponse {
-    #[serde(rename = "agentId")]
-    pub agent_id: String,
+    pub id: String,
     pub name: String,
     #[serde(rename = "publicKey")]
     pub public_key: String,
+    #[serde(rename = "createdAt")]
+    pub created_at: u64,
 }
 
 #[derive(Deserialize)]
 pub struct ChallengeResponse {
     pub challenge: String,
+    #[serde(rename = "expiresAt")]
+    pub expires_at: u64,
 }
 
 #[derive(Serialize)]
@@ -35,7 +38,7 @@ pub struct LoginRequest {
 pub struct LoginResponse {
     pub token: String,
     #[serde(rename = "expiresAt")]
-    pub expires_at: String,
+    pub expires_at: u64,
 }
 
 // === Economy ===
@@ -70,30 +73,30 @@ pub struct GameInfo {
     pub min_players: u32,
     #[serde(rename = "maxPlayers")]
     pub max_players: u32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    #[serde(rename = "defaultConfig", skip_serializing_if = "Option::is_none")]
+    pub default_config: Option<serde_json::Value>,
 }
 
+/// Platform returns { gameId, state, visibleState } from GET /api/game/:id
 #[derive(Deserialize, Serialize, Debug)]
+pub struct GameStatusResponse {
+    #[serde(rename = "gameId")]
+    pub game_id: String,
+    pub state: String,
+    #[serde(rename = "visibleState")]
+    pub visible_state: serde_json::Value,
+}
+
+/// Phase info extracted from visibleState.currentPhase
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct PhaseInfo {
+    pub id: String,
     #[serde(rename = "type")]
     pub phase_type: String,
     pub name: String,
     #[serde(rename = "usesCommitReveal")]
     pub uses_commit_reveal: bool,
     pub timeout: u64,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-pub struct GameStatus {
-    pub id: String,
-    #[serde(rename = "gameType")]
-    pub game_type: String,
-    pub state: String,
-    #[serde(rename = "currentPhase", skip_serializing_if = "Option::is_none")]
-    pub current_phase: Option<PhaseInfo>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub result: Option<serde_json::Value>,
 }
 
 #[derive(Serialize)]
@@ -116,6 +119,7 @@ pub struct RevealPayload {
     pub data: serde_json::Value,
     pub nonce: String,
     pub signature: String,
+    pub timestamp: u64,
 }
 
 #[derive(Serialize)]
@@ -124,8 +128,11 @@ pub struct ActionPayload {
     pub game_id: String,
     #[serde(rename = "phaseId")]
     pub phase_id: String,
+    #[serde(rename = "actionType")]
+    pub action_type: String,
     pub data: serde_json::Value,
     pub signature: String,
+    pub timestamp: u64,
 }
 
 #[derive(Serialize)]
@@ -295,30 +302,53 @@ mod tests {
     }
 
     #[test]
-    fn game_status_with_phase_deserialize() {
-        let json = r#"{
-            "id": "g1",
-            "gameType": "rps",
-            "state": "active",
-            "currentPhase": {
-                "type": "simultaneous",
-                "name": "action",
-                "usesCommitReveal": true,
-                "timeout": 30000
-            }
-        }"#;
-        let status: GameStatus = serde_json::from_str(json).unwrap();
-        assert_eq!(status.id, "g1");
-        let phase = status.current_phase.unwrap();
-        assert_eq!(phase.phase_type, "simultaneous");
-        assert!(phase.uses_commit_reveal);
+    fn action_payload_has_action_type() {
+        let payload = ActionPayload {
+            game_id: "g1".into(),
+            phase_id: "p1".into(),
+            action_type: "bid".into(),
+            data: serde_json::json!({}),
+            signature: "sig".into(),
+            timestamp: 123,
+        };
+        let json = serde_json::to_value(&payload).unwrap();
+        assert_eq!(json["actionType"], "bid");
     }
 
     #[test]
-    fn game_status_without_phase_deserialize() {
-        let json = r#"{"id":"g1","gameType":"rps","state":"finished"}"#;
-        let status: GameStatus = serde_json::from_str(json).unwrap();
-        assert!(status.current_phase.is_none());
+    fn reveal_payload_has_timestamp() {
+        let payload = RevealPayload {
+            game_id: "g1".into(),
+            phase_id: "p1".into(),
+            data: serde_json::json!({}),
+            nonce: "n".into(),
+            signature: "sig".into(),
+            timestamp: 999,
+        };
+        let json = serde_json::to_value(&payload).unwrap();
+        assert_eq!(json["timestamp"], 999);
+    }
+
+    #[test]
+    fn game_status_response_deserialize() {
+        let json = r#"{"gameId":"g1","state":"active","visibleState":{"currentPhase":{"id":"p1","type":"simultaneous","name":"action","usesCommitReveal":true,"timeout":30000}}}"#;
+        let resp: GameStatusResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.game_id, "g1");
+        assert_eq!(resp.state, "active");
+    }
+
+    #[test]
+    fn register_response_uses_id_not_agent_id() {
+        let json = r#"{"id":"a1","name":"bot","publicKey":"pk","createdAt":123}"#;
+        let resp: RegisterResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.id, "a1");
+    }
+
+    #[test]
+    fn login_response_expires_at_is_number() {
+        let json = r#"{"token":"tok","expiresAt":9999999999}"#;
+        let resp: LoginResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.expires_at, 9999999999);
     }
 
     #[test]

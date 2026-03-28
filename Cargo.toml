@@ -34,6 +34,7 @@ rand = "0.8"
 
 # Encoding
 hex = "0.4"
+base64 = "0.22"
 
 # Misc
 anyhow = "1"

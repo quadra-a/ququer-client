@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 
 use crate::config::ququer_dir;
+use crate::crypto::public_key_to_spki_base64;
 
 #[derive(Serialize, Deserialize)]
 pub struct StoredKeys {
@@ -23,7 +24,7 @@ pub fn generate_keypair() -> SigningKey {
 
 pub fn save_keys(key: &SigningKey, agent_id: Option<&str>) -> Result<()> {
     let stored = StoredKeys {
-        public_key: hex::encode(key.verifying_key().as_bytes()),
+        public_key: public_key_to_spki_base64(key),
         secret_key: hex::encode(key.to_bytes()),
         agent_id: agent_id.map(String::from),
     };
@@ -56,20 +57,19 @@ pub fn load_or_generate() -> Result<(SigningKey, bool)> {
     }
 }
 
-pub fn public_key_hex(key: &SigningKey) -> String {
-    hex::encode(key.verifying_key().as_bytes())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn public_key_hex_format() {
+    fn public_key_is_spki_base64() {
+        use base64::Engine;
         let key = SigningKey::from_bytes(&[42u8; 32]);
-        let hex_str = public_key_hex(&key);
-        assert_eq!(hex_str.len(), 64);
-        assert!(hex_str.chars().all(|c| c.is_ascii_hexdigit()));
+        let spki = public_key_to_spki_base64(&key);
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(&spki)
+            .unwrap();
+        assert_eq!(decoded.len(), 44); // 12 prefix + 32 key
     }
 
     #[test]
@@ -79,7 +79,7 @@ mod tests {
 
         let key = SigningKey::from_bytes(&[7u8; 32]);
         let stored = StoredKeys {
-            public_key: hex::encode(key.verifying_key().as_bytes()),
+            public_key: public_key_to_spki_base64(&key),
             secret_key: hex::encode(key.to_bytes()),
             agent_id: Some("agent-1".to_string()),
         };
@@ -91,7 +91,10 @@ mod tests {
         let key_bytes: [u8; 32] = bytes.try_into().unwrap();
         let loaded_key = SigningKey::from_bytes(&key_bytes);
 
-        assert_eq!(public_key_hex(&key), public_key_hex(&loaded_key));
+        assert_eq!(
+            public_key_to_spki_base64(&key),
+            public_key_to_spki_base64(&loaded_key)
+        );
         assert_eq!(loaded.agent_id, Some("agent-1".to_string()));
     }
 

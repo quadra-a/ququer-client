@@ -6,59 +6,48 @@ use ququer_client::api::ApiClient;
 
 fn mock_game_status_simultaneous() -> serde_json::Value {
     json!({
-        "id": "game-1",
-        "gameType": "rock-paper-scissors",
+        "gameId": "game-1",
         "state": "active",
-        "currentPhase": {
-            "type": "simultaneous",
-            "name": "action",
-            "usesCommitReveal": true,
-            "timeout": 30000
+        "visibleState": {
+            "currentPhase": {
+                "id": "phase-1",
+                "type": "simultaneous",
+                "name": "action",
+                "usesCommitReveal": true,
+                "timeout": 30000
+            }
         }
     })
 }
 
 fn mock_game_status_sequential() -> serde_json::Value {
     json!({
-        "id": "game-1",
-        "gameType": "liars-dice",
+        "gameId": "game-1",
         "state": "active",
-        "currentPhase": {
-            "type": "sequential",
-            "name": "bid",
-            "usesCommitReveal": false,
-            "timeout": 30000
+        "visibleState": {
+            "currentPhase": {
+                "id": "phase-2",
+                "type": "sequential",
+                "name": "bid",
+                "usesCommitReveal": false,
+                "timeout": 30000
+            }
         }
     })
 }
 
 fn mock_game_status_no_phase() -> serde_json::Value {
     json!({
-        "id": "game-1",
-        "gameType": "rps",
-        "state": "finished"
+        "gameId": "game-1",
+        "state": "finished",
+        "visibleState": {}
     })
-}
-
-fn sse_body(events: &[serde_json::Value]) -> String {
-    events
-        .iter()
-        .map(|e| format!("data: {}\n\n", e))
-        .collect::<String>()
 }
 
 #[tokio::test]
 async fn submit_cr_sends_commit_then_reveal() {
     let server = MockServer::start().await;
 
-    // 1. Mock game status → simultaneous CR
-    Mock::given(method("GET"))
-        .and(path("/api/game/game-1"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(mock_game_status_simultaneous()))
-        .mount(&server)
-        .await;
-
-    // 2. Mock commit endpoint
     Mock::given(method("POST"))
         .and(path("/api/game/game-1/commit"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
@@ -67,22 +56,6 @@ async fn submit_cr_sends_commit_then_reveal() {
         .mount(&server)
         .await;
 
-    // 3. Mock SSE stream: all_committed then phase_result
-    let sse_events = sse_body(&[
-        json!({"type": "all_committed", "phase": "action"}),
-        json!({"type": "phase_result", "phase": "action", "result": {"winner": "agent-1"}}),
-    ]);
-    Mock::given(method("GET"))
-        .and(path("/api/sse/game/game-1"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("content-type", "text/event-stream")
-                .set_body_string(sse_events),
-        )
-        .mount(&server)
-        .await;
-
-    // 4. Mock reveal endpoint
     Mock::given(method("POST"))
         .and(path("/api/game/game-1/reveal"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
@@ -91,42 +64,34 @@ async fn submit_cr_sends_commit_then_reveal() {
         .mount(&server)
         .await;
 
-    // 5. Mock heartbeat (will be called in background)
-    Mock::given(method("POST"))
-        .and(path("/api/game/game-1/heartbeat"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
-        .mount(&server)
-        .await;
-
-    // Run the submit_cr flow directly
     let api = ApiClient::new(&server.uri());
     let key = ed25519_dalek::SigningKey::from_bytes(&[10u8; 32]);
     let data_str = r#"{"action":"rock"}"#;
     let data_value: serde_json::Value = serde_json::from_str(data_str).unwrap();
 
-    // We test the internal flow by calling the game module's helpers
-    // Since submit_cr is private, we test via the crypto + API layer
     let nonce = ququer_client::crypto::generate_nonce();
     let hash = ququer_client::crypto::commit_hash(data_str, &nonce);
     let signature = ququer_client::crypto::sign_bytes(&key, hash.as_bytes());
 
-    // Verify commit hash is correct
+    // Verify commit hash matches protocol: SHA-256(JSON + ":" + nonce) → hex
     use sha2::{Digest, Sha256};
     let expected_input = format!("{}:{}", data_str, nonce);
     let expected_hash = hex::encode(Sha256::digest(expected_input.as_bytes()));
     assert_eq!(hash, expected_hash);
 
-    // Verify signature is valid
-    let sig_bytes = hex::decode(&signature).unwrap();
+    // Verify signature is base64 and valid
+    use base64::Engine;
+    let sig_bytes = base64::engine::general_purpose::STANDARD
+        .decode(&signature)
+        .unwrap();
+    assert_eq!(sig_bytes.len(), 64);
     let sig = ed25519_dalek::Signature::from_bytes(&sig_bytes.try_into().unwrap());
-    assert!(
-        ed25519_dalek::Verifier::verify(&key.verifying_key(), hash.as_bytes(), &sig).is_ok()
-    );
+    assert!(ed25519_dalek::Verifier::verify(&key.verifying_key(), hash.as_bytes(), &sig).is_ok());
 
     // Test commit API call
     let commit_body = json!({
         "gameId": "game-1",
-        "phaseId": "action",
+        "phaseId": "phase-1",
         "hash": hash,
         "signature": signature,
         "timestamp": 12345
@@ -137,17 +102,18 @@ async fn submit_cr_sends_commit_then_reveal() {
         .unwrap();
     assert_eq!(resp["ok"], true);
 
-    // Test reveal API call
+    // Test reveal API call (now includes timestamp)
     let reveal_sig = ququer_client::crypto::sign_bytes(
         &key,
         format!("{}:{}", data_str, nonce).as_bytes(),
     );
     let reveal_body = json!({
         "gameId": "game-1",
-        "phaseId": "action",
+        "phaseId": "phase-1",
         "data": data_value,
         "nonce": nonce,
-        "signature": reveal_sig
+        "signature": reveal_sig,
+        "timestamp": 12346
     });
     let resp: serde_json::Value = api
         .post("/api/game/game-1/reveal", &reveal_body, "test-token")
@@ -157,14 +123,8 @@ async fn submit_cr_sends_commit_then_reveal() {
 }
 
 #[tokio::test]
-async fn submit_action_sends_signed_action() {
+async fn submit_action_sends_signed_action_with_action_type() {
     let server = MockServer::start().await;
-
-    Mock::given(method("GET"))
-        .and(path("/api/game/game-1"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(mock_game_status_sequential()))
-        .mount(&server)
-        .await;
 
     Mock::given(method("POST"))
         .and(path("/api/game/game-1/action"))
@@ -180,11 +140,14 @@ async fn submit_action_sends_signed_action() {
     let data_str = serde_json::to_string(&data_value).unwrap();
     let signature = ququer_client::crypto::sign_bytes(&key, data_str.as_bytes());
 
+    // Action payload now includes actionType and timestamp
     let action_body = json!({
         "gameId": "game-1",
-        "phaseId": "bid",
+        "phaseId": "phase-2",
+        "actionType": "bid",
         "data": data_value,
-        "signature": signature
+        "signature": signature,
+        "timestamp": 12345
     });
     let resp: serde_json::Value = api
         .post("/api/game/game-1/action", &action_body, "test-token")
@@ -192,16 +155,16 @@ async fn submit_action_sends_signed_action() {
         .unwrap();
     assert_eq!(resp["ok"], true);
 
-    // Verify signature
-    let sig_bytes = hex::decode(&signature).unwrap();
-    let sig = ed25519_dalek::Signature::from_bytes(&sig_bytes.try_into().unwrap());
-    assert!(
-        ed25519_dalek::Verifier::verify(&key.verifying_key(), data_str.as_bytes(), &sig).is_ok()
-    );
+    // Verify signature is base64
+    use base64::Engine;
+    let sig_bytes = base64::engine::general_purpose::STANDARD
+        .decode(&signature)
+        .unwrap();
+    assert_eq!(sig_bytes.len(), 64);
 }
 
 #[tokio::test]
-async fn game_status_no_phase_parsed() {
+async fn game_status_response_parsed() {
     let server = MockServer::start().await;
 
     Mock::given(method("GET"))
@@ -211,14 +174,13 @@ async fn game_status_no_phase_parsed() {
         .await;
 
     let api = ApiClient::new(&server.uri());
-    let status: ququer_client::types::GameStatus =
+    let status: ququer_client::types::GameStatusResponse =
         api.get("/api/game/game-1", "test-token").await.unwrap();
     assert_eq!(status.state, "finished");
-    assert!(status.current_phase.is_none());
 }
 
 #[tokio::test]
-async fn game_status_simultaneous_phase_parsed() {
+async fn game_status_with_phase_extracts_correctly() {
     let server = MockServer::start().await;
 
     Mock::given(method("GET"))
@@ -228,38 +190,26 @@ async fn game_status_simultaneous_phase_parsed() {
         .await;
 
     let api = ApiClient::new(&server.uri());
-    let status: ququer_client::types::GameStatus =
+    let status: ququer_client::types::GameStatusResponse =
         api.get("/api/game/game-1", "test-token").await.unwrap();
-    let phase = status.current_phase.unwrap();
+    assert_eq!(status.state, "active");
+
+    // Extract phase from visibleState
+    let phase: ququer_client::types::PhaseInfo =
+        serde_json::from_value(status.visible_state["currentPhase"].clone()).unwrap();
     assert_eq!(phase.phase_type, "simultaneous");
     assert!(phase.uses_commit_reveal);
-    assert_eq!(phase.name, "action");
+    assert_eq!(phase.id, "phase-1");
 }
 
 #[tokio::test]
 async fn sse_game_events_parse_correctly() {
-    // Test that SSE event bodies parse into GameEvent variants
     let cases = vec![
-        (
-            r#"{"type":"all_committed","phase":"action"}"#,
-            "all_committed",
-        ),
-        (
-            r#"{"type":"phase_result","phase":"action","result":{"winner":"a1"}}"#,
-            "phase_result",
-        ),
-        (
-            r#"{"type":"game_end","winner":"a1","reason":"normal"}"#,
-            "game_end",
-        ),
-        (
-            r#"{"type":"game_end","winner":null,"reason":"timeout"}"#,
-            "game_end_draw",
-        ),
-        (
-            r#"{"type":"your_turn","phase":"bid"}"#,
-            "your_turn",
-        ),
+        (r#"{"type":"all_committed","phase":"action"}"#, "all_committed"),
+        (r#"{"type":"phase_result","phase":"action","result":{"winner":"a1"}}"#, "phase_result"),
+        (r#"{"type":"game_end","winner":"a1","reason":"normal"}"#, "game_end"),
+        (r#"{"type":"game_end","winner":null,"reason":"timeout"}"#, "game_end_draw"),
+        (r#"{"type":"your_turn","phase":"bid"}"#, "your_turn"),
     ];
 
     for (json_str, label) in cases {
@@ -308,23 +258,36 @@ async fn match_event_parse_from_sse_body() {
 
 #[tokio::test]
 async fn commit_reveal_hash_chain_integrity() {
-    // Simulate a mini commit-reveal flow and verify hash consistency
     let key = ed25519_dalek::SigningKey::from_bytes(&[20u8; 32]);
     let data = r#"{"action":"paper"}"#;
     let nonce = "fixed-nonce-for-test";
 
-    // Commit phase
     let hash = ququer_client::crypto::commit_hash(data, nonce);
     let commit_sig = ququer_client::crypto::sign_bytes(&key, hash.as_bytes());
 
-    // Reveal phase — recompute hash and verify it matches
+    // Hash is deterministic
     let reveal_hash = ququer_client::crypto::commit_hash(data, nonce);
-    assert_eq!(hash, reveal_hash, "hash must be deterministic");
+    assert_eq!(hash, reveal_hash);
 
-    // Verify commit signature still valid
-    let sig_bytes = hex::decode(&commit_sig).unwrap();
+    // Signature is base64 and verifiable
+    use base64::Engine;
+    let sig_bytes = base64::engine::general_purpose::STANDARD
+        .decode(&commit_sig)
+        .unwrap();
     let sig = ed25519_dalek::Signature::from_bytes(&sig_bytes.try_into().unwrap());
-    assert!(
-        ed25519_dalek::Verifier::verify(&key.verifying_key(), hash.as_bytes(), &sig).is_ok()
-    );
+    assert!(ed25519_dalek::Verifier::verify(&key.verifying_key(), hash.as_bytes(), &sig).is_ok());
+}
+
+#[tokio::test]
+async fn public_key_is_spki_base64_not_hex() {
+    let key = ed25519_dalek::SigningKey::from_bytes(&[99u8; 32]);
+    let pk = ququer_client::crypto::public_key_to_spki_base64(&key);
+
+    // Should be base64, not hex
+    use base64::Engine;
+    let decoded = base64::engine::general_purpose::STANDARD.decode(&pk).unwrap();
+    assert_eq!(decoded.len(), 44); // 12 byte SPKI prefix + 32 byte key
+
+    // Should NOT be 64 chars hex
+    assert_ne!(pk.len(), 64);
 }

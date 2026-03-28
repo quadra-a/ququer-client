@@ -71,7 +71,7 @@ async fn full_register_then_login_flow() {
     Mock::given(method("GET"))
         .and(path("/api/auth/challenge"))
         .respond_with(
-            ResponseTemplate::new(200).set_body_json(json!({"challenge": "ch-xyz"})),
+            ResponseTemplate::new(200).set_body_json(json!({"challenge": "ch-xyz", "expiresAt": 9999999999u64})),
         )
         .mount(&server)
         .await;
@@ -81,7 +81,7 @@ async fn full_register_then_login_flow() {
         .and(path("/api/auth/login"))
         .respond_with(
             ResponseTemplate::new(200)
-                .set_body_json(json!({"token": "tok-123", "expiresAt": "9999999999"})),
+                .set_body_json(json!({"token": "tok-123", "expiresAt": 9999999999u64})),
         )
         .mount(&server)
         .await;

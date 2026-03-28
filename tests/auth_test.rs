@@ -5,7 +5,6 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use ququer_client::api::ApiClient;
 use ququer_client::auth;
-use ququer_client::crypto::sign_bytes;
 
 #[tokio::test]
 async fn login_flow_challenge_then_token() {
@@ -17,7 +16,7 @@ async fn login_flow_challenge_then_token() {
         .and(path("/api/auth/challenge"))
         .and(query_param("agentId", "agent-1"))
         .respond_with(
-            ResponseTemplate::new(200).set_body_json(json!({"challenge": "random-challenge-123"})),
+            ResponseTemplate::new(200).set_body_json(json!({"challenge": "random-challenge-123", "expiresAt": 9999999999u64})),
         )
         .mount(&server)
         .await;
@@ -27,7 +26,7 @@ async fn login_flow_challenge_then_token() {
         .and(path("/api/auth/login"))
         .respond_with(
             ResponseTemplate::new(200)
-                .set_body_json(json!({"token": "jwt-token-abc", "expiresAt": "9999999999"})),
+                .set_body_json(json!({"token": "jwt-token-abc", "expiresAt": 9999999999u64})),
         )
         .expect(1)
         .mount(&server)
@@ -38,7 +37,7 @@ async fn login_flow_challenge_then_token() {
 
     assert_eq!(cache.token, "jwt-token-abc");
     assert_eq!(cache.agent_id, "agent-1");
-    assert_eq!(cache.expires_at, "9999999999");
+    assert_eq!(cache.expires_at, 9999999999u64);
 }
 
 #[tokio::test]
@@ -66,7 +65,7 @@ async fn login_bad_credentials_propagates() {
     Mock::given(method("GET"))
         .and(path("/api/auth/challenge"))
         .respond_with(
-            ResponseTemplate::new(200).set_body_json(json!({"challenge": "ch"})),
+            ResponseTemplate::new(200).set_body_json(json!({"challenge": "ch", "expiresAt": 9999999999u64})),
         )
         .mount(&server)
         .await;
