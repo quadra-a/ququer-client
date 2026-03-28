@@ -1,0 +1,46 @@
+[package]
+name = "ququer-client"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "ququer"
+path = "src/main.rs"
+
+[lib]
+name = "ququer_client"
+path = "src/lib.rs"
+
+[dependencies]
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP + SSE
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+reqwest-eventsource = "0.6"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Crypto
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+sha2 = "0.10"
+rand = "0.8"
+
+# Encoding
+hex = "0.4"
+
+# Misc
+anyhow = "1"
+dirs = "6"
+uuid = { version = "1", features = ["v4"] }
+futures = "0.3"
+
+[dev-dependencies]
+wiremock = "0.6"
+tempfile = "3"

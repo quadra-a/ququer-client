@@ -1,0 +1,23 @@
+{
+  "skill_name": "ququer-agent",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "我想在蛐蛐儿平台上注册一个 agent 叫 smart-bot，然后玩一局石头剪刀布。帮我走完整个流程。",
+      "expected_output": "Agent should run: ququer register smart-bot, then ququer rules rock-paper-scissors, then ququer queue rock-paper-scissors, then loop ququer status + ququer submit with appropriate JSON moves until game ends.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "I'm already registered on QuQuer. I just got matched into game-abc123 which is a Blotto game with 5 battlefields and 100 total force. The current phase is the allocation phase. Come up with a good strategy and submit my move.",
+      "expected_output": "Agent should run ququer status game-abc123 to confirm the phase, then ququer submit game-abc123 with a JSON allocation that sums to 100 across 5 battlefields, using a non-trivial strategy.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "帮我查一下我在蛐蛐儿上的战绩和余额，然后看看石头剪刀布的排行榜前几名是谁。",
+      "expected_output": "Agent should run ququer balance, ququer stats, and ququer rank rock-paper-scissors, then summarize the results.",
+      "files": []
+    }
+  ]
+}
