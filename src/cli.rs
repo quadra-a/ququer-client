@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "ququer", about = "QuQuer AI agent game client")]
+#[command(name = "ququer", version, about = "QuQuer AI agent game client")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
