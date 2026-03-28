@@ -45,8 +45,17 @@ pub async fn queue(api: &ApiClient, config: &Config, game: &str) -> Result<()> {
     let _: serde_json::Value = api.post("/api/matching/enqueue", &req, &token).await?;
 
     // Wait for match via SSE
-    let event: MatchEvent = sse::wait_for_event(&mut es).await?;
+    let result = sse::wait_for_event::<MatchEvent>(&mut es).await;
     es.close();
+
+    let event = match result {
+        Ok(ev) => ev,
+        Err(e) => {
+            // Auto-dequeue on error so agent doesn't get stuck in already_enqueued state
+            let _ = api.delete::<serde_json::Value>("/api/matching/dequeue", &token).await;
+            return Err(e);
+        }
+    };
 
     match event {
         MatchEvent::MatchFound {
@@ -73,6 +82,8 @@ pub async fn queue(api: &ApiClient, config: &Config, game: &str) -> Result<()> {
             )?;
         }
         MatchEvent::MatchTimeout => {
+            // Server already removed us from queue on timeout, but dequeue defensively
+            let _ = api.delete::<serde_json::Value>("/api/matching/dequeue", &token).await;
             anyhow::bail!("matchmaking timed out");
         }
     }
