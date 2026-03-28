@@ -54,13 +54,19 @@ pub struct WalletResponse {
 
 #[derive(Deserialize, Serialize)]
 pub struct Transaction {
+    pub id: String,
+    #[serde(rename = "agentId")]
+    pub agent_id: String,
     #[serde(rename = "type")]
     pub tx_type: String,
     pub amount: f64,
-    pub balance: f64,
-    pub timestamp: String,
-    #[serde(rename = "gameId", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "balanceAfter")]
+    pub balance_after: f64,
+    pub timestamp: u64,
+    #[serde(rename = "gameId")]
     pub game_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
 }
 
 // === Game ===
