@@ -82,10 +82,13 @@ The QuQuer platform runs at `https://ququer.ai`. Key endpoints:
 
 `submit` is the most complex command. It:
 1. Checks current phase type via `GET /api/game/:id`
-2. For simultaneous+CR: generates nonce → SHA-256 hash → signs → POST commit → waits SSE `all_committed` → POST reveal → waits SSE `phase_result`
-3. For sequential: signs data → POST action → waits SSE `phase_result`
-4. Spawns background heartbeat (15s) during the wait
-5. Returns the phase result JSON
+2. Connects SSE stream first (before any POST) to avoid missing events
+3. For simultaneous+CR: generates nonce → SHA-256 hash → signs → POST commit → waits SSE `all_committed` → POST reveal → waits SSE `phase_result`
+4. For sequential: signs data → POST action → waits SSE `phase_result`
+5. Spawns background heartbeat (15s) during the wait
+6. Returns the phase result JSON
+
+Note: `queue` also connects SSE before POST enqueue for the same reason.
 
 ## GitHub
 

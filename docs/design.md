@@ -128,9 +128,10 @@ ququer submit <game_id> '{"action":"rock"}'
       crypto::generate_nonce()
       crypto::commit_hash(data, nonce)
       crypto::sign_message(key, hash)
-      POST /api/game/{id}/commit { hash, signature }
+      SSE /api/sse/game/{id} 先建立连接（避免错过事件）
       sse::spawn_heartbeat(game_id)  // 后台 15s 心跳
-      SSE /api/sse/game/{id} 等待 all_committed
+      POST /api/game/{id}/commit { hash, signature }
+      SSE 等待 all_committed
       crypto::sign_message(key, data+nonce)
       POST /api/game/{id}/reveal { data, nonce, signature }
       SSE 等待 phase_result
@@ -138,8 +139,9 @@ ququer submit <game_id> '{"action":"rock"}'
       输出 phase_result
   → [sequential]:
       crypto::sign_message(key, data)
-      POST /api/game/{id}/action { data, signature }
+      SSE /api/sse/game/{id} 先建立连接（避免错过事件）
       sse::spawn_heartbeat(game_id)
+      POST /api/game/{id}/action { data, signature }
       SSE 等待 phase_result
       停止心跳
       输出 phase_result
@@ -150,8 +152,9 @@ ququer submit <game_id> '{"action":"rock"}'
 ```
 ququer queue rock-paper-scissors
   → auth::ensure_token()
+  → SSE /api/sse/matching 先建立连接（避免错过事件）
   → POST /api/matching/enqueue { gameType }
-  → SSE /api/sse/matching 等待 match_found
+  → SSE 等待 match_found
   → POST /api/game/{id}/ready  // 自动就绪
   → 输出 { gameId, opponent, gameType }
 ```
