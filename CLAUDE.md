@@ -88,7 +88,7 @@ The QuQuer platform runs at `https://ququer.ai`. Key endpoints:
 5. Spawns background heartbeat (15s) during the wait
 6. Returns the phase result JSON
 
-Note: `queue` also connects SSE before POST enqueue for the same reason. On timeout or SSE error, `queue` automatically calls dequeue to prevent stuck `already_enqueued` state.
+Note: `queue` also connects SSE before POST enqueue for the same reason. On timeout or stream termination, `queue` automatically calls dequeue to prevent stuck `already_enqueued` state. Transient SSE errors are tolerated and auto-retried.
 
 ## GitHub
 
