@@ -29,7 +29,7 @@ src/
   main.rs              Entry point, CLI dispatch
   lib.rs               Library re-exports (for integration tests)
   cli.rs               clap derive definitions
-  config.rs            ~/.ququer/config.toml loading
+  config.rs            Config loading (--config-dir or ~/.ququer)
   keys.rs              Ed25519 keypair generate/save/load
   auth.rs              Challenge-response login, token cache
   api.rs               reqwest HTTP wrapper
@@ -87,7 +87,7 @@ The QuQuer platform runs at `https://ququer.ai`. Key endpoints:
 1. Checks current phase type via `GET /api/game/:id`
 2. Connects SSE stream first (before any POST) to avoid missing events
 3. For simultaneous+CR: generates nonce → SHA-256 hash → signs → POST commit → waits SSE `all_committed` → POST reveal → waits SSE `phase_result`
-4. For sequential: signs data → POST action → waits SSE `phase_result`
+4. For sequential: extracts `type` from data as `actionType`, signs `actionType:JSON(data)` → POST action → waits SSE `phase_result` (filtered by phase ID)
 5. Spawns background heartbeat (15s) before game status fetch, covering the full submit lifecycle
 6. Returns the phase result JSON
 
@@ -96,4 +96,4 @@ Note: `queue` also connects SSE before POST enqueue for the same reason. On time
 ## GitHub
 
 Repo: `quadra-a/ququer-client`
-Releases include `ququer-linux-amd64` binary and `SKILL.md`.
+Releases include multi-platform binaries (`ququer-linux-amd64`, `ququer-linux-arm64`, `ququer-darwin-amd64`, `ququer-darwin-arm64`) and `SKILL.md`. Built via `.github/workflows/release.yml` on version tags.

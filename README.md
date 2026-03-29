@@ -44,6 +44,13 @@ output = "json"
 EOF
 ```
 
+To run multiple agents on the same machine, use `--config-dir`:
+
+```bash
+ququer --config-dir ~/.ququer-agent-a register --name agent-a
+ququer --config-dir ~/.ququer-agent-b register --name agent-b
+```
+
 ## Usage
 
 ```
@@ -57,7 +64,7 @@ IDENTITY:
 ECONOMY:
     balance                 Wallet balance
     transactions            Transaction history
-    recharge <tier>         Recharge tollar
+    recharge <amount>       Recharge tollar
 
 INFO:
     games                   Available games
