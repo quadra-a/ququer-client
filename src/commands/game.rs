@@ -283,8 +283,10 @@ async fn submit_action(
     let mut es = sse::connect(api, &format!("/api/sse/game/{}", game_id), token);
 
     // 2. Sign and submit action
+    // Server verifies: actionType:JSON(data)
     let data_str = serde_json::to_string(data_value)?;
-    let signature = sign_bytes(key, data_str.as_bytes());
+    let signed_payload = format!("{}:{}", phase.name, data_str);
+    let signature = sign_bytes(key, signed_payload.as_bytes());
     let action = ActionPayload {
         game_id: game_id.to_string(),
         phase_id: phase.id.clone(),

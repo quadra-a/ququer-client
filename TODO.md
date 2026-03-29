@@ -1,0 +1,4 @@
+- [ ] 验证 Liar's Dice 签名修复：运行编译并执行 LD 单场测试。
+- [ ] 测试 Watch 功能：启动一个 LD 游戏，让另一个 Agent 进入 watch 模式观察状态流。
+- [ ] 测试 Forfeit 功能：在 LD 过程中强制退出，检查 Server 是否正确结算。
+- [ ] 压力测试：同时开启 5 场不同类型的游戏（RPS, Blotto, LD），验证 `already_enqueued` 是否依然存在。
