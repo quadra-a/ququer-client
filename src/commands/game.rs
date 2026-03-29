@@ -284,14 +284,24 @@ async fn submit_action(
 
     // 2. Sign and submit action
     // Server verifies: actionType:JSON(data)
-    let data_str = serde_json::to_string(data_value)?;
-    let signed_payload = format!("{}:{}", phase.name, data_str);
+    let action_type = data_value
+        .get("type")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("data must contain a \"type\" field (e.g. \"bid\", \"challenge\")"))?
+        .to_string();
+    // Strip "type" from data — server expects only the action-specific fields
+    let mut data_obj = data_value.clone();
+    if let Some(obj) = data_obj.as_object_mut() {
+        obj.remove("type");
+    }
+    let data_str = serde_json::to_string(&data_obj)?;
+    let signed_payload = format!("{}:{}", action_type, data_str);
     let signature = sign_bytes(key, signed_payload.as_bytes());
     let action = ActionPayload {
         game_id: game_id.to_string(),
         phase_id: phase.id.clone(),
-        action_type: phase.name.clone(),
-        data: data_value.clone(),
+        action_type,
+        data: data_obj,
         signature,
         timestamp: now_ms(),
     };
@@ -299,13 +309,13 @@ async fn submit_action(
         .post(&format!("/api/game/{}/action", game_id), &action, token)
         .await?;
 
-    // 3. Wait for phase_result via SSE
+    // 3. Wait for phase_result via SSE (filter by current phase ID)
     loop {
         match es.next().await {
             Some(Ok(Event::Message(msg))) => {
                 if let Ok(event) = serde_json::from_str::<GameEvent>(&msg.data) {
                     match event {
-                        GameEvent::PhaseResult { result, .. } => {
+                        GameEvent::PhaseResult { result, phase: ref p } if *p == phase.id => {
                             es.close();
                             return Ok(result);
                         }

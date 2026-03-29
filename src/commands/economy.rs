@@ -20,12 +20,11 @@ pub async fn transactions(api: &ApiClient, config: &Config) -> Result<()> {
     Ok(())
 }
 
-pub async fn recharge(api: &ApiClient, config: &Config, tier: &str) -> Result<()> {
+pub async fn recharge(api: &ApiClient, config: &Config, amount: u64) -> Result<()> {
     let token = auth::ensure_token(api).await?;
-    // x402 flow: first request returns 402 with payment requirements
-    // For now, just show the recharge options or attempt the flow
+    let body = serde_json::json!({ "amount": amount });
     let resp: serde_json::Value = api
-        .get_raw(&format!("/api/wallet/recharge/{}", tier), &token)
+        .post("/api/wallet/recharge", &body, &token)
         .await?;
     output::print_raw(config, &resp)?;
     Ok(())
