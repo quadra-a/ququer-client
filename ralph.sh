@@ -2,6 +2,7 @@
 # ralph.sh
 n=1
 MAX_LOOPS=5 # 防止无限烧钱/死循环
+shopt -s expand_aliases
 
 while [ $n -le $MAX_LOOPS ]; do
   ts=$(date -Iseconds)
@@ -12,7 +13,7 @@ while [ $n -le $MAX_LOOPS ]; do
 
   # 2. 核心改进：使用 timeout 防止单个任务无限挂起
   # 如果 ccd 5分钟没反应，强制杀掉并进入下一轮
-  timeout 30min cat PROMPT.md | ccd
+  timeout 30m cat PROMPT.md | ccd
   
   # 检查 ccd 的退出状态
   RET_CODE=$?
