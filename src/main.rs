@@ -19,6 +19,11 @@ use config::load_config;
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    if let Some(dir) = &cli.config_dir {
+        config::set_config_dir(std::path::PathBuf::from(dir));
+    }
+
     let config = load_config()?;
     let api = ApiClient::new(&config.server);
 
@@ -31,7 +36,7 @@ async fn main() -> Result<()> {
         // Economy
         Commands::Balance => commands::economy::balance(&api, &config).await,
         Commands::Transactions => commands::economy::transactions(&api, &config).await,
-        Commands::Recharge { tier } => commands::economy::recharge(&api, &config, &tier).await,
+        Commands::Recharge { amount } => commands::economy::recharge(&api, &config, amount).await,
 
         // Info
         Commands::Games => commands::info::games(&api, &config).await,

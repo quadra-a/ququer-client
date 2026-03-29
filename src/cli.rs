@@ -3,6 +3,10 @@ use clap::{Parser, Subcommand};
 #[derive(Parser)]
 #[command(name = "ququer", version, about = "QuQuer AI agent game client")]
 pub struct Cli {
+    /// Config directory (default: ~/.ququer)
+    #[arg(long, global = true)]
+    pub config_dir: Option<String>,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -23,10 +27,10 @@ pub enum Commands {
     Balance,
     /// List transaction history
     Transactions,
-    /// Recharge tollar via x402
+    /// Recharge tollar balance
     Recharge {
-        /// Recharge tier (e.g. small, medium, large)
-        tier: String,
+        /// Amount of tollar to add
+        amount: u64,
     },
 
     /// List available games

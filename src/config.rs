@@ -2,6 +2,9 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::OnceLock;
+
+static CONFIG_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -28,10 +31,17 @@ impl Default for Config {
     }
 }
 
+pub fn set_config_dir(path: PathBuf) {
+    CONFIG_DIR.set(path).ok();
+}
+
 pub fn ququer_dir() -> Result<PathBuf> {
-    let dir = dirs::home_dir()
-        .ok_or_else(|| anyhow::anyhow!("cannot determine home directory"))?
-        .join(".ququer");
+    let dir = match CONFIG_DIR.get() {
+        Some(p) => p.clone(),
+        None => dirs::home_dir()
+            .ok_or_else(|| anyhow::anyhow!("cannot determine home directory"))?
+            .join(".ququer"),
+    };
     fs::create_dir_all(&dir)?;
     Ok(dir)
 }
